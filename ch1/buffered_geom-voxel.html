@@ -1,0 +1,175 @@
+<html>
+  <head>
+    <title>three.js</title>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/84/three.js" ></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.js"></script>
+    <style>
+      body {
+        /* set margin to 0 and overflow to hidden, to go fullscreen */
+        /* スクロールバー除去 */
+        margin: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="Stats-output">
+    </div>
+    <!-- Div which will hold the Output -->
+    <div id="WebGL-output">
+    </div>
+
+    <!-- Javascript code that runs our Three.js examples -->
+    <script type="text/javascript">
+      var DOT_SIZE = 16;
+      var X_START_POS = 0;
+      var Y_START_POS = 0;
+      var Z_START_POS = 0;
+      var MATERIALS = {
+        1: {
+          name: "/Oxides/SiO2_Thermal",
+          color: [0, 0, 255]
+        },
+        2: {
+          name: "/Silicon/Si_Xtal",
+          color: [255, 0, 0]
+        },
+        255: {
+          name: "/Air",
+          color: [192, 192, 192]
+        }
+      }
+      var renderer, scene, camera, particleSystem;
+
+      init();
+      //animate();
+      render();
+      function generate_voxel_pattern(thickness) {
+        var p = []
+        const etched_mat =    [ 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255 ]
+        const patterned_mat = [ 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1 ]
+        for (var i = 0; i < thickness; i++) {
+          p.push(etched_mat);
+        }
+        for (var i = 0; i < thickness; i++) {
+          p.push(patterned_mat);
+        }
+        for (var i = 0; i < thickness; i++) {
+          p.push(etched_mat);
+        }
+        return p;
+      }
+
+      function generate_voxel(X, c) {
+        var arr = [];
+        for (var i = 0; i < X; i++) {
+          var p = []
+          for (var j = 0; j < c; j++) {
+            p = p.concat(generate_voxel_pattern(5));
+          }
+          arr.push(p);
+        }
+        return arr;
+      }
+
+      function init() {
+
+        // scene
+        scene = new THREE.Scene();
+        // camera
+        camera = new THREE.PerspectiveCamera(
+          45, window.innerWidth / window.innerHeight, 1, 10000
+        );
+        camera.position.x = 20;
+        camera.position.y = 30;
+        camera.position.z = 80;
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        // particle system geometry
+        var geometry = new THREE.BufferGeometry();
+        var voxel = generate_voxel(10, 3);
+        var X = voxel.length;
+        var Y = voxel[0][0].length; // voxel z-direction is three.js y-direction
+        var Z = voxel[0].length;
+        var voxel_size = X * Y * Z;
+        var positions = new Float32Array(voxel_size * 3);
+        var values_color = new Float32Array(voxel_size * 3);
+        var values_size = new Float32Array(voxel_size);
+
+        // convert to vertex and color from voxel-data
+        for (var x = 0; x < X; x++) {
+          for (var y = 0; y < Y; y++) {
+            for (var z = 0; z < Z; z++) {
+              var pos = (x + y*X + z*X*Y) * 3;
+
+              var material = MATERIALS[voxel[x][z][y]]
+              if (material.name === "/Air") {
+                continue;
+              }
+              positions[pos + 0] = x;
+              positions[pos + 1] = y;
+              positions[pos + 2] = z;
+
+              var color = material.color;
+              values_color[pos + 0] = color[0];
+              values_color[pos + 1] = color[1];
+              values_color[pos + 2] = color[2];
+              values_size[pos / 3] = 10;
+            }
+          }
+        }
+
+        geometry.addAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.addAttribute('color', new THREE.BufferAttribute(values_color, 3));
+        geometry.addAttribute('size', new THREE.BufferAttribute(values_size, 1));
+        geometry.computeBoundingSphere();
+
+        console.log(geometry);
+
+        const mat = new THREE.PointCloudMaterial({
+          transparent: true,
+          opacity: 1,
+          size: 3,
+          vertexColors: THREE.VertexColors
+        });
+        // const mat = new THREE.MeshBasicMaterial({ 
+        //   transparent: true, 
+        //   vertexColors: THREE.VertexColors 
+        // }); 
+        console.log(mat);
+        particleSystem = new THREE.PointCloud(geometry, mat);
+        // particleSystem = new THREE.Mesh(geometry, mat);
+        particleSystem.dynamic = true;
+        particleSystem.rotation.y -= Math.PI / 2;
+        scene.add(particleSystem);
+
+        // renderer
+        renderer = new THREE.WebGLRenderer({
+          alpha: true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearAlpha(0); // transparent
+        renderer.setClearColor(new THREE.Color(0xc0c0c0));
+        document.getElementById("WebGL-output")
+          .appendChild(renderer.domElement);
+      }
+
+      function animate() {
+        window.requestAnimationFrame(animate);
+
+        render();
+      }
+
+      function render() {
+        // rotate
+        particleSystem.rotation.y += 0.010;
+        // render
+        renderer.render(scene, camera);
+      }
+
+    </script>
+  </body>
+</html>
