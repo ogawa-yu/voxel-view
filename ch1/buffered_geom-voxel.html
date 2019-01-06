@@ -2,7 +2,7 @@
   <head>
     <title>three.js</title>
     <!-- Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/84/three.js" ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/100/three.js" ></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.js"></script>
     <style>
@@ -42,21 +42,32 @@
           color: [192, 192, 192]
         }
       }
-      var renderer, scene, camera, particleSystem;
+      var renderer, scene, camera;
+      var models = [];
 
       init();
-      //animate();
-      render();
+      animate();
+      //render();
+
       function generate_voxel_pattern(thickness) {
         var p = []
-        const etched_mat =    [ 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255 ]
-        const patterned_mat = [ 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1 ]
+        const etched_mat =          [ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 ]
+        const ssloped_pattern_mat = [ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 ]
+        const sloped_pattern_mat =  [ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 ]
+        const vsloped_pattern_mat = [ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 255, 255, 255, 255, 255, 255, 255, 255 ]
+        const patterned_mat =       [ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ]
         for (var i = 0; i < thickness; i++) {
           p.push(etched_mat);
         }
+        p.push(ssloped_pattern_mat);
+        p.push(sloped_pattern_mat);
+        p.push(vsloped_pattern_mat);
         for (var i = 0; i < thickness; i++) {
           p.push(patterned_mat);
         }
+        p.push(vsloped_pattern_mat);
+        p.push(sloped_pattern_mat);
+        p.push(ssloped_pattern_mat);
         for (var i = 0; i < thickness; i++) {
           p.push(etched_mat);
         }
@@ -68,7 +79,7 @@
         for (var i = 0; i < X; i++) {
           var p = []
           for (var j = 0; j < c; j++) {
-            p = p.concat(generate_voxel_pattern(5));
+            p = p.concat(generate_voxel_pattern(10));
           }
           arr.push(p);
         }
@@ -76,7 +87,10 @@
       }
 
       function init() {
-
+        // renderer
+        renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(new THREE.Color(0xc0c0c0));
         // scene
         scene = new THREE.Scene();
         // camera
@@ -84,77 +98,112 @@
           45, window.innerWidth / window.innerHeight, 1, 10000
         );
         camera.position.x = 20;
-        camera.position.y = 30;
-        camera.position.z = 80;
+        camera.position.y = 100;
+        camera.position.z = 300;
         camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-        // particle system geometry
-        var geometry = new THREE.BufferGeometry();
-        var voxel = generate_voxel(10, 3);
+        addLight();
+
+        const voxel = generate_voxel(20, 5);
+        var X = voxel.length;
+        var Z = voxel[0].length;
+        models.push(addVoxel(voxel));
+
+        var group = new THREE.Group();
+        for (var i = 0; i < models.length; i++) {
+          group.add(models[i])
+        }
+        scene.add(group)
+
+        renderer.shadowMap.enabled = true;
+        console.log(renderer);
+
+
+        document.getElementById("WebGL-output")
+          .appendChild(renderer.domElement);
+      }
+
+      function addVoxel(voxel) {
         var X = voxel.length;
         var Y = voxel[0][0].length; // voxel z-direction is three.js y-direction
         var Z = voxel[0].length;
-        var voxel_size = X * Y * Z;
-        var positions = new Float32Array(voxel_size * 3);
-        var values_color = new Float32Array(voxel_size * 3);
-        var values_size = new Float32Array(voxel_size);
 
+        // particle system geometry
+        var geometry = new THREE.BufferGeometry();
+        var verticles = []
+        var colors = []
+        var sizes = []
         // convert to vertex and color from voxel-data
         for (var x = 0; x < X; x++) {
           for (var y = 0; y < Y; y++) {
             for (var z = 0; z < Z; z++) {
-              var pos = (x + y*X + z*X*Y) * 3;
-
               var material = MATERIALS[voxel[x][z][y]]
               if (material.name === "/Air") {
                 continue;
               }
-              positions[pos + 0] = x;
-              positions[pos + 1] = y;
-              positions[pos + 2] = z;
+              verticles.push(x - X / 2);
+              verticles.push(y - Y / 2);
+              verticles.push(z - Z / 2);
 
               var color = material.color;
-              values_color[pos + 0] = color[0];
-              values_color[pos + 1] = color[1];
-              values_color[pos + 2] = color[2];
-              values_size[pos / 3] = 10;
+              colors.push(color[0]);
+              colors.push(color[1]);
+              colors.push(color[2]);
+
+              sizes.push(10);
             }
           }
         }
+        var positions = new Float32Array(verticles);
+        var values_color = new Float32Array(colors);
+        var values_size = new Float32Array(sizes);
 
         geometry.addAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.addAttribute('color', new THREE.BufferAttribute(values_color, 3));
         geometry.addAttribute('size', new THREE.BufferAttribute(values_size, 1));
         geometry.computeBoundingSphere();
-
         console.log(geometry);
 
-        const mat = new THREE.PointCloudMaterial({
+        const mat = new THREE.PointsMaterial({
           transparent: true,
           opacity: 1,
-          size: 3,
+          size: 2,
           vertexColors: THREE.VertexColors
         });
-        // const mat = new THREE.MeshBasicMaterial({ 
-        //   transparent: true, 
-        //   vertexColors: THREE.VertexColors 
-        // }); 
         console.log(mat);
-        particleSystem = new THREE.PointCloud(geometry, mat);
-        // particleSystem = new THREE.Mesh(geometry, mat);
+        var particleSystem = new THREE.Points(geometry, mat);
         particleSystem.dynamic = true;
-        particleSystem.rotation.y -= Math.PI / 2;
-        scene.add(particleSystem);
+        //particleSystem.castShadow = true;
+        particleSystem.receiveShadow = true;
+        particleSystem.rotation.y += Math.PI / 4
+        return particleSystem;
+      }
 
-        // renderer
-        renderer = new THREE.WebGLRenderer({
-          alpha: true
+      function addPlane(X, Z) {
+        var planeGeometry = new THREE.PlaneGeometry(X, Z);
+        var planeMaterial = new THREE.MeshBasicMaterial({
+          color: 0xcccccc
         });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearAlpha(0); // transparent
-        renderer.setClearColor(new THREE.Color(0xc0c0c0));
-        document.getElementById("WebGL-output")
-          .appendChild(renderer.domElement);
+        plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.position.set(0, 0, 0);
+        //plane.position.z = -10;
+        plane.rotation.y -= Math.PI / 4;
+        plane.rotation.z -= Math.PI / 2;
+        plane.rotation.x -= Math.PI * 1;
+        plane.receiveShadow = true;
+        return plane;
+      }
+
+      function addLight() {
+        var ambientLight = new THREE.AmbientLight(0x0c0c0c);
+        scene.add(ambientLight);
+
+        var spotLight = new THREE.DirectionalLight(0xffffff);
+        spotLight.position.set(-100, 250, 1000);
+        spotLight.shadow.mapSize.width = 2048;
+        spotLight.shadow.mapSize.height = 2048;
+        spotLight.castShadow = true;
+        scene.add(spotLight);
       }
 
       function animate() {
@@ -165,7 +214,9 @@
 
       function render() {
         // rotate
-        particleSystem.rotation.y += 0.010;
+        for (var i = 0; i < models.length; i++) {
+          models[i].rotation.y += 0.010;
+        }
         // render
         renderer.render(scene, camera);
       }
